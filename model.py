@@ -36,11 +36,11 @@ x2 = Conv2D(128,(120,3), padding="same")(x1)
 # Dropout
 l_drop = Dropout(rate=0.5, seed=41)(x2)
 
-# LSTM forward and backward layer
-x3 = LSTM(256)(x2)
+# BiLSTM  layer
+l_lstm = LSTM(256)(l_drop)
+l_bilstm = Bidirectional()(l_lstm)
 
-x4 = Bidirectional()(x3)
-
-x5 = 
+# FC layer
+fc = Dense(2)(l_bilstm)
 
 
