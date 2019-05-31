@@ -9,21 +9,24 @@ import tensorflow as tf
 from keras.preprocessing.text import Tokenizer
 from keras.preprocessing.sequence import pad_sequences
 from keras.layers import Input, Dense, Conv1D, Concatenate, Bidirectional, LSTM
-from keras.layers import Dropout, Reshape, Permute, Embedding
+from keras.layers import Dropout, Reshape, Permute, Embedding, CuDNNLSTM
 from keras.regularizers import l2
 import random, math
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
+import os
+import time
 
 HIGH = 21
 WIDTH = 1000
 rampup_length = 80
 rampdown_length = 50
-num_epochs = 300
+num_epochs = 3
 BATCH_SIZE = 32
 learning_rate_max = 0.003
 scaled_unsup_weight_max = 100
-l2value = 0.001
+l2value = 0.01
 
 def load_data():
     with open('cytoplasm_pos_neg.txt') as fr:
@@ -88,17 +91,18 @@ nb_train = len(x_train)
 total_batch = int( np.ceil( nb_train / BATCH_SIZE))
 
 sess = tf.InteractiveSession()
-ep = tf.Variable(0.0)  
+epoch = tf.Variable(0, name='ep', trainable=False)  
 rate = tf.Variable(0.0)
 weight = tf.Variable(0.0)
 # input
 with tf.name_scope("input"):
     inputs = tf.placeholder(dtype=tf.float32, shape=(None,1000))
     y_true = tf.placeholder(dtype=tf.float32, shape=(None,2))
+    y_true_cls = tf.argmax(y_true, dimension=1)
 
 # Embedding layer
 with tf.name_scope("embedding"):
-    x = Embedding(output_dim=20, input_dim=23, input_length=1000)(inputs)    
+    x = Embedding(output_dim=100, input_dim=23, input_length=1000)(inputs)    
 # first convolutionary layers
 with tf.name_scope("cnn_1"):    
     x1_1 = Conv1D(20,1, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
@@ -126,7 +130,8 @@ with tf.name_scope("drop_1"):
 
 # BiLSTM  layer
 with tf.name_scope("bilstm"):    
-    l_bilstm = Bidirectional(LSTM(128))(l_drop)
+    lstm = CuDNNLSTM(128)
+    l_bilstm = Bidirectional(lstm)(l_drop)
 
 with tf.name_scope("drop_2"):
     l_drop_2 = Dropout(rate=0.5)(l_bilstm)
@@ -142,21 +147,44 @@ with tf.name_scope("loss"):
     loss_label = tf.reduce_sum(-tf.reduce_sum(y_true * tf.log(y_pred_1), axis=-1) * tf.reduce_sum(y_true, axis=-1)) / nb_label
     loss_unlabel = tf.reduce_mean( tf.square( y_pred_2 - y_pred_1))
     loss = loss_label + weight * loss_unlabel
-
+# acc
+with tf.name_scope("acc"):
+    y_pred_cls = tf.argmax(y_pred_1, dimension=1)
+    accuracy = tf.reduce_mean(tf.cast( tf.equal( y_pred_cls, y_true_cls)), tf.float32)
 # train
 with tf.name_scope("train"):
     train_step = tf.train.AdamOptimizer(rate).minimize(loss)  
 
 
-sess.run(tf.global_variables_initializer())
+sess.run(tf.global_variables_initializer()) # initial variables
 
+ckpt_dir = "../log/"
+if not os.path.exists(ckpt_dir):
+    os.makedirs(ckpt_dir)
+saver = tf.train.Saver(max_to_keep=2)
+summary_wirter = tf.summary.FileWriter(ckpt_dir, sess.graph)
 
-for epoch in range(0, num_epochs):
-    sess.run(tf.assign(ep, epoch))
-    sess.run(tf.assign(weight, unsupWeight(epoch)))
-    sess.run(tf.assign(rate, learningRate(epoch)))
-    if (epoch % 50) == 0 and epoch > 0:
-        print("epoch======>", epoch)   
+# if the checkpoint file is existed, read the lastest checkpoint file and restore variable value.
+ckpt = tf.train.latest_checkpoint(ckpt_dir)
+if ckpt != None:
+    saver.restore(sess, ckpt)
+else:
+    print("Training from scratch")
+
+start_epoch = sess.run(epoch)    
+print("Training starts from {} epoch".format(start_epoch+1))
+
+best_validation_accuracy = 0.0
+last_improvement = 0
+require_improvement = 2 # required number of iterations in which the improvement is found
+
+start_time = time.time()
+for ep in range(0, num_epochs):
+    x_train, y_train = shuffle(x_train, y_train)
+    sess.run(tf.assign(epoch, ep+1))
+    sess.run(tf.assign(weight, unsupWeight(ep)))
+    sess.run(tf.assign(rate, learningRate(ep)))
+    
     for i in range(total_batch): # for each miniBatch
         start = (i * BATCH_SIZE) % nb_train
         end = min(start + BATCH_SIZE, nb_train)
@@ -164,7 +192,20 @@ for epoch in range(0, num_epochs):
         batch_y = y_train[start:end]
         
         sess.run(train_step, feed_dict={inputs: batch_x, y_true: batch_y})
-
+               
+    
+    print("epoch {} finished".format(ep)) 
+    acc_validation = sess.run(accuracy, feed_dict={inputs:x_test, y_true:y_test})
+    if acc_validation > best_validation_accuracy:
+        best_validation_accuracy = acc_validation
+        last_improvement = ep
+        # save checkpoint
+        saver.save(sess, ckpt+"model.cpkt", global_step=ep+1)
+    if ep - last_improvement > require_improvement:
+        print("No imporvement found in a while, stopping optimization")
+        # break out from the for-loop
+        break
+        
 y_pred = sess.run(y_pred_1, feed_dict={inputs: x_test, y_true: y_test})   
 pred_result_accuracy(y_pred, y_test)       
 sess.close()                
