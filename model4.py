@@ -17,6 +17,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 import os
 import time
+from datetime import timedelta
 
 HIGH = 21
 WIDTH = 1000
@@ -158,7 +159,7 @@ with tf.name_scope("train"):
 
 sess.run(tf.global_variables_initializer()) # initial variables
 
-ckpt_dir = "../log/"
+ckpt_dir = "log/"
 if not os.path.exists(ckpt_dir):
     os.makedirs(ckpt_dir)
 saver = tf.train.Saver(max_to_keep=2)
@@ -195,6 +196,7 @@ for ep in range(0, num_epochs):
                
     
     print("epoch {} finished".format(ep)) 
+    '''
     acc_validation = sess.run(accuracy, feed_dict={inputs:x_test, y_true:y_test})
     if acc_validation > best_validation_accuracy:
         best_validation_accuracy = acc_validation
@@ -205,9 +207,13 @@ for ep in range(0, num_epochs):
         print("No imporvement found in a while, stopping optimization")
         # break out from the for-loop
         break
+    '''
+    saver.save(sess, ckpt+"model.cpkt", global_step=ep+1)
+end_time = time.time()
+print("Time usage: {}".format( timedelta(seconds=int(round(start_time-end_time)))))
         
 y_pred = sess.run(y_pred_1, feed_dict={inputs: x_test, y_true: y_test})   
-pred_result_accuracy(y_pred, y_test)       
+pred_result_accuracy(y_pred, y_test)  
 sess.close()                
             
             
