@@ -84,7 +84,7 @@ def pred_result_accuracy(y_pred, y_true):
             count = count + 1
     print(count/len(y_true))
 
-load_data() # just run in the program firstly run
+#load_data() # just run in the program firstly run
 data = np.load('padSequences.npz')
 x_train, x_test, y_train, y_test = data['arr_0'], data['arr_1'], data['arr_2'], data['arr_3']
 nb_train = len(x_train)
@@ -150,7 +150,7 @@ with tf.name_scope("loss"):
 # acc
 with tf.name_scope("acc"):
     y_pred_cls = tf.argmax(y_pred_1, dimension=1)
-    accuracy = tf.reduce_mean(tf.cast( tf.equal( y_pred_cls, y_true_cls)), tf.float32)
+    accuracy = tf.reduce_mean(tf.cast( tf.equal( y_pred_cls, y_true_cls), dtype=tf.float32))
 # train
 with tf.name_scope("train"):
     train_step = tf.train.AdamOptimizer(rate).minimize(loss)  
