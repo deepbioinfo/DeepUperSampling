@@ -1,0 +1,4 @@
+model_checkpoint_path: "model.cpkt-44"
+all_model_checkpoint_paths: "model.cpkt-42"
+all_model_checkpoint_paths: "model.cpkt-43"
+all_model_checkpoint_paths: "model.cpkt-44"
