@@ -9,4 +9,5 @@ __pycache__/
 cytoplasm_pssm/
 secreted_pssm/
 data/
+writePosAndNegFastaFile.py
 

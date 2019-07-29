@@ -10,15 +10,8 @@ import keras
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras import backend as K
 from sklearn.metrics import accuracy_score,f1_score,roc_auc_score,recall_score,precision_score,confusion_matrix,matthews_corrcoef 
-from semisupHelper import semisupCallback
-from keras.models import Model
-from keras.layers import Input, Dense, Dropout, Concatenate
-from keras.layers import Conv1D, Bidirectional, Embedding, LSTM
-from keras.regularizers import l2
+from SemisupCallback import SemisupCallback
 from keras import optimizers
-
-# Global varibale
-weight = K.variable(0.)
 
 ## Define loss functions
 def sup_loss(y_true, y_pred):  
@@ -29,95 +22,6 @@ def semisup_loss(o1, o2):
     def los(y_true, y_pred):
         return keras.losses.mean_squared_error(o1, o2)
     return los
-def semisup_net(learning_rate):
-    # varibale
-    global weight
-    l2value = 0.001
-    maxlen = 1000
-    ## Constructe model
-    x_input = Input(shape=(1000,), dtype='int32', name='main_input')
-    x = Embedding(output_dim=20, input_dim=23, input_length=maxlen)(x_input)
-    
-    # first convolutionary layers
-    x1_1 = Conv1D(20,1, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    x1_2 = Conv1D(20,3, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    x1_3 = Conv1D(20,5, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    x1_4 = Conv1D(20,9, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    x1_5 = Conv1D(20,15, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    x1_6 = Conv1D(20,21, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    
-    # Concatenate all CNN layers
-    x = Concatenate()([x1_1, x1_2, x1_3, x1_4, x1_5, x1_6])
-    
-    # second CNN layer
-    x = Conv1D(128,3, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    
-    # Dropout
-    drop_a = Dropout(rate=0.25)
-    x_a = drop_a(x)
-    x_b = drop_a(x)
-    
-    # bidirectional lstm
-    blstm = Bidirectional(LSTM(10))
-    x_a = blstm(x_a)
-    x_b = blstm(x_b)
-    
-    # Dropout
-    drop_b = Dropout(0.25)
-    x_a = drop_b(x_a)
-    x_b = drop_b(x_b)
-    
-    # output
-    out = Dense(2, activation='softmax')(x_a)
-    
-    model = Model(inputs=x_input, outputs=[out, x_b])
-    model.summary()
-    
-    loss2 = semisup_loss(x_a, x_b)
-    model.compile(loss=[sup_loss, loss2], loss_weights=[1, weight],
-                  optimizer=optimizers.Adam(lr=learning_rate),  metrics=['accuracy'])  
-    
-    return model
-
-def sup_net(learning_rate):
-    l2value = 0.001
-    maxlen = 1000
-    x_input = Input(shape=(1000,), dtype='int32', name='main_input')
-    x = Embedding(output_dim=20, input_dim=23, input_length=maxlen)(x_input)
-    
-    # first convolutionary layers
-    x1_1 = Conv1D(20,1, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    x1_2 = Conv1D(20,3, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    x1_3 = Conv1D(20,5, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    x1_4 = Conv1D(20,9, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    x1_5 = Conv1D(20,15, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    x1_6 = Conv1D(20,21, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    
-    # Concatenate all CNN layers
-    x = Concatenate()([x1_1, x1_2, x1_3, x1_4, x1_5, x1_6])
-    
-    # second CNN layer
-    x = Conv1D(128,3, activation='relu', kernel_regularizer=l2(l2value), padding="same")(x)
-    
-    # Dropout
-    x = Dropout(rate=0.25)(x)
-    
-    # bidirectional lstm
-    x = Bidirectional(LSTM(10))(x)
-    
-    # Dropout
-    x = Dropout(0.25)(x)
-        
-    # output
-    out = Dense(2, activation='softmax')(x)
-    
-    model = Model(inputs=x_input, outputs=out)
-    model.summary()
-    
-    # equal to: model.compile(loss='categorical_crossentropy', optimizer=keras.optimizers.Adadelta(lr=0.01), metrics=['accuracy'])
-    model.compile(loss=sup_loss, optimizer=optimizers.Adam(lr=learning_rate), metrics=['accuracy'])
-
-    return model
 
 ## print and save metrics of model
 ## Params:
@@ -152,48 +56,42 @@ def displayMetrics(y_true, predicted_Probability, noteinfo, metricsFile):
         #plotROC(labels,predicted_Probability[:,0])
         
 class SemisupLearner:
-    def __init__(self, batch_size, epochs, patience, rampup_len, rampdown_len,
-                 lr_max, scal_unsup_wm, gammer, beita, modelFile, model, **data):
-        self.batch_size = batch_size
-        self.epochs = epochs
-        self.patience = patience
-        self.modelFile = modelFile
+    def __init__(self, modelFile, model, **ssparam):
+        self.weight = K.variable(0.)
+        self.modelFile = modelFile       
+        self.ssparam = ssparam
+        layer = model.get_layer('unsupLayer')
+        loss2 = semisup_loss(layer.get_output_at(0), layer.get_output_at(1))
+        model.compile(loss=[sup_loss, loss2], loss_weights=[1, self.weight],
+                     optimizer=optimizers.Adam(lr=ssparam['learning_rate']),  metrics=['accuracy']) 
         self.model = model
-        self.data = data
-        self.rampup_len = rampup_len
-        self.rampdown_len = rampdown_len
-        self.lr_max = lr_max
-        self.scal_unsup_wm = scal_unsup_wm
-        self.gammer = gammer
-        self.beita = beita
     def train(self):
         print('Training...')
-        global weight
-        ssCallback = semisupCallback(weight, self.epochs, self.rampup_len, self.rampdown_len,
-                 self.lr_max, self.scal_unsup_wm, self.gammer, self.beita)
-        x_train = self.data['x_train']
-        y_train = self.data['y_train']
-        if 'x_vldt' in self.data.keys():
-            self.model.fit(x_train, y_train,
-              batch_size=self.batch_size,
-              epochs=self.epochs,
-              validation_data=[self.data['x_vldt'], self.data['y_vldt']],
-              callbacks=[ssCallback,
-                         EarlyStopping(patience=5),
-                         ModelCheckpoint(filepath=self.modelFile,
-                                         save_weights_only=True,
-                                         save_best_only=False)]
+        ssCallback = SemisupCallback(self.weight,self.ssparam['rampup_length'], self.ssparam['rampdown_length'], 
+                                     self.ssparam['epochs'], self.ssparam['learning_rate_max'], 
+                                     self.ssparam['scaled_unsup_weight_max'], self.ssparam['gammer'], 
+                                     self.ssparam['beita'])
+        if 'x_vldt' in self.ssparam.keys():
+            self.model.fit(self.ssparam['x_train'], self.ssparam['y_train'],
+                              batch_size=self.ssparam['batch_size'],
+                              epochs=self.ssparam['epochs'],
+                              validation_data=[self.ssparam['x_vldt'], self.ssparam['y_vldt']],
+                              callbacks=[ssCallback,
+                                         EarlyStopping(patience=self.ssparam['patience']),
+                                         ModelCheckpoint(filepath=self.modelFile,
+                                                         save_weights_only=True,
+                                                         save_best_only=False)]
             )
         else:
-            self.model.fit(x_train, y_train,
-              batch_size=self.batch_size,
-              epochs=self.epochs,
-              validation_split=0.1,
-              callbacks=[ssCallback,
-                         EarlyStopping(patience=self.patience),
-                         ModelCheckpoint(filepath=self.modelFile,
-                                         save_weights_only=True,
-                                         save_best_only=False)]
+            self.model.fit(self.ssparam['x_train'], self.ssparam['y_train'],
+                              batch_size=self.ssparam['batch_size'],
+                              epochs=self.ssparam['epochs'],
+                              validation_split=0.1,
+                              callbacks=[ssCallback,
+                                         EarlyStopping(patience=self.ssparam['patience']),
+                                         ModelCheckpoint(filepath=self.modelFile,
+                                                         save_weights_only=True,
+                                                         save_best_only=False)]
             )
                          
     def predict(self, x_test):

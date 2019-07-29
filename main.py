@@ -9,9 +9,10 @@ import numpy as np
 from sklearn.utils import shuffle
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from semisupLearner_keras import displayMetrics
-from semisupLearner_keras import sup_net, semisup_net,SemisupLearner
+from semisupLearner_keras import sup_loss, SemisupLearner
 from dataHelper import loadBenchmarkData,padSequences
-#from dataHelper import duplicateSample
+from nets import semisup_net, sup_net
+from keras import optimizers
 
 def readConfParam(loc):
     conf = ConfigParser()
@@ -43,66 +44,80 @@ def readConfParam(loc):
  
     return confParam
 
+def supLearn(x_train, y_train, x_test, y_test, modelFile, noteInfo, metricsFile, **confParam):
+    # supervised learning
+    model = sup_net()
+    model.compile(loss=sup_loss, optimizer=optimizers.Adam(lr=confParam['learning_rate']), metrics=['accuracy'])
+    model.fit(x_train, y_train, 
+              batch_size=confParam['batch_size'], 
+              epochs=confParam['epochs'], 
+              validation_split=0.1,
+              callbacks=[EarlyStopping(patience=confParam['patience']),
+                         ModelCheckpoint(filepath=modelFile,
+                                 save_weights_only=True,
+                                 save_best_only=False)])
+    pred_prob = model.predict(x_test)
+    # print predicting metrics
+    displayMetrics(y_test, pred_prob, noteInfo, metricsFile) 
+    
+def semisupLearn(x_train, y_train, x_test, y_test, modelFile, noteInfo, metricsFile, **confParam):
+    # semi-supervised learning
+    model = semisup_net() 
+    ssparam={}
+    ssparam['x_train'] = x_test
+    ssparam['y_train'] = [y_test, y_test]
+    ssparam['batch_size'] = confParam['batch_size']
+    ssparam['epochs'] = confParam['epochs']
+    ssparam['patience'] = confParam['patience'] 
+    ssparam['rampup_length'] = confParam['rampup_length']
+    ssparam['rampdown_length'] = confParam['rampdown_length']
+    ssparam['learning_rate_max'] = confParam['learning_rate_max']
+    ssparam['scaled_unsup_weight_max'] = confParam['scaled_unsup_weight_max']
+    ssparam['gammer'] = confParam['gammer']
+    ssparam['beita'] = confParam['beita'],
+    ssparam['learning_rate'] = confParam['learning_rate']
+    ssl = SemisupLearner(modelFile, model, **ssparam)
+    # Train net
+    ssl.train()
+    # predict
+    pred_prob = ssl.predict(x_test)
+    # print predicting metrics
+    displayMetrics(y_test, pred_prob, noteInfo, metricsFile)   
+
 ### main ...
 def main(loc):
-    num_upsamp = 0
-    is_on_bechmark = False
-    is_on_upsamp = True
+    #num_upsamp = 0
+    is_on_bechmark = True
+    is_on_upsamp = False
     is_supervised = False
     is_semisup = True
     confParam = readConfParam(loc)
-    
+    print('Generating labels and features...')
     (x_train, y_train), (x_test, y_test)=loadBenchmarkData(confParam['posFile'], confParam['negFile'],
                                                                                  confParam['fpostrain'], confParam['fnegtrain'],
                                                                                  confParam['fpostest'], confParam['fnegtest'],
                                                                                  hasBenchmarkData=confParam['hasBenchmarkData'])
     x_train, y_train = shuffle(x_train, y_train)
     ## learning on bechmark data 
-    if is_on_bechmark:
-        print('Generating labels and features...')
-                
+    if is_on_bechmark:                
         if is_supervised:
-            # supervised learning
-            model = sup_net(confParam['learning_rate'])
-            model.fit(x_train, y_train, batch_size=confParam['batch_size'], epochs=confParam['epochs'], 
-                      callbacks=[EarlyStopping(patience=confParam['patience']),
-                                 ModelCheckpoint(filepath='./modelFile/cyto_superModel_benchmark.hdf5',
-                                         save_weights_only=True,
-                                         save_best_only=False)])
-            pred_prob = model.predict(x_test)
-            # print predicting metrics
             noteInfo = '\nOn bechmark dataset, supervised learning predicting result'
             metricsFile = 'supervised_info.txt'
-            displayMetrics(y_test, pred_prob, noteInfo, metricsFile)    
+            modelFile = './modelFile/cyto_superModel_benchmark.hdf5'
+            supLearn(x_train, y_train, x_test, y_test, modelFile, noteInfo, metricsFile, **confParam)  
         if is_semisup:
-            # semi-supervised learning
-            model_file = './modelFile/cyto_semiSuperModel_benchmark.hdf5'
-            model = semisup_net(confParam['learning_rate']) 
-            data={'x_train': x_train, 'y_train': [y_train, y_train]}
-            ssl = SemisupLearner(confParam['batch_size'], confParam['epochs'], confParam['patience'], 
-                                 confParam['rampup_length'], confParam['rampdown_length'], confParam['learning_rate_max'],
-                                 confParam['scaled_unsup_weight_max'], confParam['gammer'], confParam['beita'],
-                                 model_file, model, **data)
-            # Train net
-            ssl.train()
-            # predict
-            pred_prob = ssl.predict(x_test)
-            # print predicting metrics
             noteInfo = '\nOn bechmark dataset, semi-supervised learning predicting result'
             metricsFile = 'semisup_info.txt'
-            displayMetrics(y_test, pred_prob, noteInfo, metricsFile)   
+            modelFile = './modelFile/cyto_semiSuperModel_benchmark.hdf5'
+            semisupLearn(x_train, y_train, x_test, y_test, modelFile, noteInfo, metricsFile, **confParam)
     ## learning on up-sampling 
     if is_on_upsamp:
         for mulrate in [2,3,4,5,6]:
             upsampleFile = './data/cytoplasm/fake_pos_{}.fa'.format(mulrate)
-            semisup_model_file = './modelFile/cyto_semiSupModel_upsample_{}.hdf5'.format(mulrate)
-            sup_model_file = './modelFile/cyto_supModel_upsample_{}.hdf5'.format(mulrate)
+            semisup_modelFile = './modelFile/cyto_semiSupModel_upsample_{}.hdf5'.format(mulrate)
+            sup_modelFile = './modelFile/cyto_supModel_upsample_{}.hdf5'.format(mulrate)
             
             x_fake = padSequences(upsampleFile, confParam['maxlen'])
-            '''
-            x_pos = padSequences(confParam['posFile'], confParam['maxlen'])
-            x_fake = duplicateSample(x_pos, num_upsamp)
-            '''
             y_fake = np.zeros((len(x_fake), 2))
             y_fake[:,0] = 1
             x_train_upsamp = np.concatenate((x_train, x_fake))
@@ -110,34 +125,12 @@ def main(loc):
             x_train_upsamp, y_train_upsamp = shuffle(x_train_upsamp, y_train_upsamp)
             
             if is_supervised:
-                # supervised learning
-                model = sup_net(confParam['learning_rate'])
-                model.fit(x_train_upsamp, y_train_upsamp, batch_size=confParam['batch_size'], epochs=confParam['epochs'], 
-                          callbacks=[EarlyStopping(patience=confParam['patience']),
-                                     ModelCheckpoint(filepath=sup_model_file,
-                                         save_weights_only=True,
-                                         save_best_only=False)])
-                pred_prob = model.predict(x_test)
-                # print predicting metrics
-                noteInfo = '\nsupervised learning predicting result. generate postive sample {} multiple by pssm'.format(mulrate)
-                metricsFile = 'supervised_info.txt'
-                displayMetrics(y_test, pred_prob, noteInfo, metricsFile)    
-            if is_semisup:
-                # semi-supervised learning
-                model = semisup_net(confParam['learning_rate']) 
-                data={'x_train': x_train_upsamp, 'y_train': [y_train_upsamp, y_train_upsamp]}
-                ssl = SemisupLearner(confParam['batch_size'], confParam['epochs'], confParam['patience'], 
-                                     confParam['rampup_length'], confParam['rampdown_length'], confParam['learning_rate_max'],
-                                     confParam['scaled_unsup_weight_max'], confParam['gammer'], confParam['beita'],
-                                     semisup_model_file, model, **data)
-                # Train net
-                ssl.train()
-                # predict
-                pred_prob = ssl.predict(x_test)
-                # print predicting metrics
                 noteInfo = '\ngenerate positive sample {}  multiple samples by pssm'.format(mulrate)
-                metricsFile = 'semisup_info.txt'
-                displayMetrics(y_test, pred_prob, noteInfo, metricsFile)    
-        
+                metricsFile = 'supervised_info.txt'
+                supLearn(x_train_upsamp, y_train_upsamp, x_test, y_test, sup_modelFile, noteInfo, metricsFile, **confParam)
+            if is_semisup:
+                noteInfo = '\ngenerate positive sample {}  multiple samples by pssm'.format(mulrate)
+                metricsFile = 'semisup_info.txt' 
+                semisupLearn(x_train, y_train, x_test, y_test, semisup_modelFile, noteInfo, metricsFile, **confParam)
                 
 main('cytoplasm')

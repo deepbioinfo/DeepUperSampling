@@ -9,7 +9,7 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio.Alphabet import IUPAC
 
-with open('Secreted_pos_neg.txt') as fr:
+with open('cytoplasm_pos_neg.txt') as fr:
         lns = fr.readlines()
         
 pos_seqrecords = []
@@ -28,8 +28,8 @@ for line in lns:
         else:
             pos_seqrecords.append(seqrecord) 
 
-SeqIO.write(neg_seqrecords, './data/secreted_neg.fa', 'fasta')
-SeqIO.write(pos_seqrecords, './data/secreted_pos.fa', 'fasta')
+SeqIO.write(neg_seqrecords, './data/cytoplasm_neg.fa', 'fasta')
+SeqIO.write(pos_seqrecords, './data/cytoplasm_pos.fa', 'fasta')
 
     
     
