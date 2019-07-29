@@ -18,7 +18,7 @@ ssparam = {"rampup_length": 30,
                   "beita": 0.5} 
 '''
 __metaclass__ = type
-class SemiSuperviserController:
+class SemisupController:
     def __init__(self, rampup_length, rampdown_length, epochs, learning_rate_max, 
                  scaled_unsup_weight_max, gammer, beita):
         self.rampup_length = rampup_length

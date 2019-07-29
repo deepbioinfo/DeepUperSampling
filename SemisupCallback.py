@@ -4,7 +4,7 @@ Created on Sun Jul 28 13:30:05 2019
 
 @author: falcon1
 """
-from SemiSuperviserController import SemiSuperviserController
+from SemisupController import SemisupController
 import keras
 from keras import backend as K
 import matplotlib.pyplot as plt
@@ -13,7 +13,7 @@ class SemisupCallback(keras.callbacks.Callback):
     def __init__(self, weight,rampup_length, rampdown_length, epochs, learning_rate_max, 
                  scaled_unsup_weight_max, gammer, beita):
         self.weight = weight
-        self.ssc = SemiSuperviserController(rampup_length, rampdown_length, epochs, learning_rate_max, 
+        self.ssc = SemisupController(rampup_length, rampdown_length, epochs, learning_rate_max, 
                  scaled_unsup_weight_max, gammer, beita)
         self.losses = {'batch':[], 'epoch':[]}
         self.accuracy = {'batch': [], 'epoch':[]}
