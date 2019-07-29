@@ -6,3 +6,7 @@ __pycache__/
 .ipynb_checkpoints/
 *.npz
 
+cytoplasm_pssm/
+secreted_pssm/
+data/
+
