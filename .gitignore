@@ -8,6 +8,7 @@ __pycache__/
 
 cytoplasm_pssm/
 secreted_pssm/
+nucleus_pssm/
 data/
 writePosAndNegFastaFile.py
-
+input.fasta

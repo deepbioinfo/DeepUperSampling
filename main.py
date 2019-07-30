@@ -64,8 +64,8 @@ def semisupLearn(x_train, y_train, x_test, y_test, modelFile, noteInfo, metricsF
     # semi-supervised learning
     model = semisup_net() 
     ssparam={}
-    ssparam['x_train'] = x_test
-    ssparam['y_train'] = [y_test, y_test]
+    ssparam['x_train'] = x_train
+    ssparam['y_train'] = [y_train, y_train]
     ssparam['batch_size'] = confParam['batch_size']
     ssparam['epochs'] = confParam['epochs']
     ssparam['patience'] = confParam['patience'] 
@@ -102,20 +102,20 @@ def main(loc):
     if is_on_bechmark:                
         if is_supervised:
             noteInfo = '\nOn bechmark dataset, supervised learning predicting result'
-            metricsFile = 'supervised_info.txt'
-            modelFile = './modelFile/cyto_superModel_benchmark.hdf5'
+            metricsFile = '{}_supervised_info.txt'.format(loc)
+            modelFile = './modelFile/{}_superModel_benchmark.hdf5'.format(loc)
             supLearn(x_train, y_train, x_test, y_test, modelFile, noteInfo, metricsFile, **confParam)  
         if is_semisup:
             noteInfo = '\nOn bechmark dataset, semi-supervised learning predicting result'
-            metricsFile = 'semisup_info.txt'
-            modelFile = './modelFile/cyto_semiSuperModel_benchmark.hdf5'
+            metricsFile = '{}_semisup_info.txt'.format(loc)
+            modelFile = './modelFile/{}_semiSuperModel_benchmark.hdf5'.format(loc)
             semisupLearn(x_train, y_train, x_test, y_test, modelFile, noteInfo, metricsFile, **confParam)
     ## learning on up-sampling 
     if is_on_upsamp:
         for mulrate in [2,3,4,5,6]:
-            upsampleFile = './data/cytoplasm/fake_pos_{}.fa'.format(mulrate)
-            semisup_modelFile = './modelFile/cyto_semiSupModel_upsample_{}.hdf5'.format(mulrate)
-            sup_modelFile = './modelFile/cyto_supModel_upsample_{}.hdf5'.format(mulrate)
+            upsampleFile = './data/{}/fake_pos_{}.fa'.format(loc,mulrate)
+            semisup_modelFile = './modelFile/{}_semiSupModel_upsample_{}.hdf5'.format(loc,mulrate)
+            sup_modelFile = './modelFile/{}_supModel_upsample_{}.hdf5'.format(loc,mulrate)
             
             x_fake = padSequences(upsampleFile, confParam['maxlen'])
             y_fake = np.zeros((len(x_fake), 2))
@@ -126,11 +126,11 @@ def main(loc):
             
             if is_supervised:
                 noteInfo = '\ngenerate positive sample {}  multiple samples by pssm'.format(mulrate)
-                metricsFile = 'supervised_info.txt'
+                metricsFile = '{}_supervised_info.txt'.format(loc)
                 supLearn(x_train_upsamp, y_train_upsamp, x_test, y_test, sup_modelFile, noteInfo, metricsFile, **confParam)
             if is_semisup:
                 noteInfo = '\ngenerate positive sample {}  multiple samples by pssm'.format(mulrate)
-                metricsFile = 'semisup_info.txt' 
+                metricsFile = '{}_semisup_info.txt'.format(loc)
                 semisupLearn(x_train, y_train, x_test, y_test, semisup_modelFile, noteInfo, metricsFile, **confParam)
                 
 main('cytoplasm')
