@@ -87,8 +87,8 @@ def semisupLearn(x_train, y_train, x_test, y_test, modelFile, noteInfo, metricsF
 ### main ...
 def main(loc):
     #num_upsamp = 0
-    is_on_bechmark = True
-    is_on_upsamp = False
+    is_on_bechmark = False
+    is_on_upsamp = True
     is_supervised = False
     is_semisup = True
     confParam = readConfParam(loc)
@@ -112,7 +112,7 @@ def main(loc):
             semisupLearn(x_train, y_train, x_test, y_test, modelFile, noteInfo, metricsFile, **confParam)
     ## learning on up-sampling 
     if is_on_upsamp:
-        for mulrate in [2,3,4,5,6]:
+        for mulrate in [1,2,3,4,5,6,7]:
             upsampleFile = './data/{}/fake_pos_{}.fa'.format(loc,mulrate)
             semisup_modelFile = './modelFile/{}_semiSupModel_upsample_{}.hdf5'.format(loc,mulrate)
             sup_modelFile = './modelFile/{}_supModel_upsample_{}.hdf5'.format(loc,mulrate)
@@ -131,6 +131,6 @@ def main(loc):
             if is_semisup:
                 noteInfo = '\ngenerate positive sample {}  multiple samples by pssm'.format(mulrate)
                 metricsFile = '{}_semisup_info.txt'.format(loc)
-                semisupLearn(x_train, y_train, x_test, y_test, semisup_modelFile, noteInfo, metricsFile, **confParam)
+                semisupLearn(x_train_upsamp, y_train_upsamp, x_test, y_test, semisup_modelFile, noteInfo, metricsFile, **confParam)
                 
 main('cytoplasm')
