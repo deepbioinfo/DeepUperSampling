@@ -9,6 +9,11 @@ __pycache__/
 cytoplasm_pssm/
 secreted_pssm/
 nucleus_pssm/
+deeploc_train_pssm/
+deeploc_test_pssm/
 data/
 writePosAndNegFastaFile.py
 input.fasta
+*.docx
+*.txt
+drawPerformance.py
